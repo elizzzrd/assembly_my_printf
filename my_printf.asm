@@ -1,25 +1,16 @@
 global my_printf
 
 BITS 32
-extern putchar
 
 section .data
-
 null_str    db "(null)", 0
 
-dispatch_table:
-%assign i 0
-%rep    256
-    dd handler_unknown
-%assign i i+1
-%endrep
 
 spec_chars      db 'c', 'x', 'b', 'o', 'd', 's', '%'
 spec_funcs      dd handler_c, handler_x, handler_b, handler_o, handler_d, handler_s, handler_percent
 spec_count      equ 7
 
 section .bss
-
 num_buf         resb 34
 
 
@@ -273,15 +264,30 @@ handler_unknown:
 ;   eax = numbers of printed symbols
 ;============================================================
 ;------------------------------------------------------------
+; output_char (via write)
+; entry: 
+;   [ebp + 8] - char
+; exit: 
+;   eax = 1 
+;------------------------------------------------------------
 output_char:
     push ebp
     mov ebp, esp
 
-    push dword [ebp + 8]
-    call putchar
-    add esp, 4
+    push ebx
+    push ecx
+    push edx
+
+    mov eax, 4              ; sys_write
+    mov ebx, 1              ; stdout
+    lea ecx, [ebp + 8]
+    mov edx, 1
+    int 0x80
 
     mov eax, 1
+    pop edx
+    pop ecx
+    pop ebx
     pop ebp
 
     ret
@@ -379,9 +385,12 @@ output_char_uint_base:
     jz .printed
 
     movzx eax, byte [esi]
+
+    push ecx
     push eax
     call output_char
     add esp, 4
+    pop ecx
 
     inc esi
     dec ecx
@@ -410,11 +419,13 @@ output_int_dec:
     test eax, eax
     jns .positive
 
+    push eax
     push dword '-'
     call output_char
     add esp, 4
-    inc ebx
+    pop eax
     
+    inc ebx
     neg eax
 
 .positive:
