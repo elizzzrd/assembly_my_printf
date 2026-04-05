@@ -8,7 +8,7 @@ global output_str
 global output_char_uint_base
 global output_int_dec
 
-extern used_bytes
+extern buffer_pos
 extern out_buf
 extern num_buf
 
@@ -22,7 +22,7 @@ buf_flush:
 
     multipush ebx, ecx, edx
 
-    mov edx, [used_bytes]
+    mov edx, [buffer_pos]
     test edx, edx
     jz .done
 
@@ -31,7 +31,7 @@ buf_flush:
     mov ecx, out_buf
     int 0x80
 
-    mov dword [used_bytes], 0
+    mov dword [buffer_pos], 0
 
 .done:
     multipop edx, ecx, ebx, ebp
@@ -48,7 +48,7 @@ buf_putc :
 
     multipush ebx, ecx, edx
 
-    mov ecx, [used_bytes]
+    mov ecx, [buffer_pos]
     cmp ecx, BUF_SIZE
     jb .enough_space
 
@@ -59,7 +59,7 @@ buf_putc :
     mov eax, [ebp + 8]
     mov [out_buf + ecx], al
     inc ecx
-    mov [used_bytes], ecx
+    mov [buffer_pos], ecx
 
     mov eax, 1
 
@@ -87,8 +87,8 @@ buf_write:
     cmp ecx, BUF_SIZE
     jae .direct_write
 
-    ; if used_bytes + len > BUF_SIZE ---> flush buffer first
-    mov eax, [used_bytes]
+    ; if buffer_pos + len > BUF_SIZE ---> flush buffer first
+    mov eax, [buffer_pos]
     add eax, ecx
     cmp eax, BUF_SIZE
     jbe .copy_to_buffer
@@ -98,14 +98,14 @@ buf_write:
 .copy_to_buffer:
     mov edx, ecx
     mov esi, [ebp + 8]                  ; str ptr
-    mov eax, [used_bytes]
+    mov eax, [buffer_pos]
     lea edi, [out_buf + eax]
     cld
     rep movsb 
 
-    mov eax, [used_bytes]
+    mov eax, [buffer_pos]
     add eax, edx
-    mov [used_bytes], eax
+    mov [buffer_pos], eax
 
     mov eax, edx
     jmp .done

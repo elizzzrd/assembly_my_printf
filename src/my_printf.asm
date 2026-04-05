@@ -1,7 +1,7 @@
 %include "push.inc"
 global my_printf
 
-global used_bytes
+global buffer_pos
 global out_buf
 global num_buf
 global null_str
@@ -13,21 +13,37 @@ extern handler_o
 extern handler_d
 extern handler_s
 extern handler_percent
+extern handler_unknown
+
 extern buf_putc
 extern buf_flush
 
 section .data
     null_str        db "(null)", 0
 
-    spec_chars      db 'c', 'x', 'b', 'o', 'd', 's', '%'
-    spec_funcs      dd handler_c, handler_x, handler_b, handler_o, handler_d, handler_s, handler_percent
-    spec_count      equ 7
+    spec_min        equ '%'
+    spec_max        equ 'x'
+    spec_range      equ spec_max - spec_min + 1
+
+    jump_table:
+                                dd handler_percent
+    times ('b' - '%' - 1)       dd handler_unknown
+                                dd handler_b
+                                dd handler_c
+                                dd handler_d
+    times ('o' - 'd' - 1)       dd handler_unknown
+                                dd handler_o
+    times ('s' - 'o' - 1)       dd handler_unknown
+                                dd handler_s
+    times ('x' - 's' - 1)       dd handler_unknown
+                                dd handler_x
+
+
 
 section .bss
     num_buf         resb 34             ; temporary buffer 
     out_buf         resb 128
-    used_bytes      resd 1
-
+    buffer_pos      resd 1
 
 section .text
 
@@ -48,7 +64,7 @@ my_printf:
     mov esi, [ebp + 8]
     lea edi, [ebp + 12]
     xor ebx, ebx
-    mov dword [used_bytes], 0
+    mov dword [buffer_pos], 0
 
 .main_loop:
     mov al, [esi]
@@ -74,34 +90,22 @@ my_printf:
     test al, al
     jz .done
 
-    multipush esi, edi, ebx
-
     movzx eax, byte [esi]
-    push eax
-    call dispatch_spec          ; eax = handler address or 0
-    add esp, 4
 
-    multipop ebx, edi, esi
+    cmp eax, spec_min
+    jb .unknown_spec
 
-    test eax, eax
-    jz .unknown_spec
+    cmp eax, spec_max
+    ja .unknown_spec
 
-    call eax
+    sub eax, spec_min
+    call dword [jump_table + 4*eax]
+
+
     jmp .main_loop
 
 .unknown_spec:
-    push dword '%'
-    call buf_putc 
-    add esp, 4
-    inc ebx
-
-    movzx eax, byte [esi]
-    push eax
-    call buf_putc 
-    add esp, 4
-    inc ebx
-
-    inc esi
+    call handler_unknown
     jmp .main_loop
 
 .done:
@@ -112,47 +116,6 @@ my_printf:
     multipop edi, esi, ebx, ebp
     ret
 
-
-;============================================================
-; dispatch_spec
-; entry:
-;   [esp + 4] - spec char
-; exit:
-;   eax = handler address or 0
-;============================================================
-dispatch_spec:
-    push ebp
-    mov ebp, esp
-
-    multipush esi, ecx
-
-    movzx eax, byte [ebp + 8]
-    mov esi, spec_chars
-    mov ecx, spec_count
-    mov edx, spec_funcs
-
-.find_loop:
-    test ecx, ecx
-    jz .not_found_spec
-
-    cmp al, [esi]
-    je .found_spec
-
-    inc esi
-    add edx, 4
-    dec ecx
-    jmp .find_loop
-
-.found_spec:
-    mov eax, [edx]
-    jmp .exit_find_loop
-
-.not_found_spec:
-    xor eax, eax
-
-.exit_find_loop:
-    multipop ecx, esi, ebp
-    ret
 
 
 section .note.GNU-stack noalloc noexec nowrite progbits

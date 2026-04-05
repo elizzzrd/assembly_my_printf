@@ -7,6 +7,7 @@ global handler_o
 global handler_d
 global handler_s
 global handler_percent
+global handler_unknown
 
 extern buf_putc
 extern output_str
@@ -118,7 +119,18 @@ handler_percent:
     ret
 ;------------------------------------------------------------
 handler_unknown:
-    xor eax, eax
+    push dword '%'
+    call buf_putc 
+    add esp, 4
+    inc ebx
+
+    movzx eax, byte [esi]
+    push eax
+    call buf_putc 
+    add esp, 4
+    inc ebx
+
+    inc esi
     ret
 ;------------------------------------------------------------
 
