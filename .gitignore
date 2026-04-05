@@ -1,4 +1,4 @@
 *.o
 printf
 /test_inc
-
+*.sh
